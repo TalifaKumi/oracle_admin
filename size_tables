@@ -1,0 +1,114 @@
+-----------------   Размер индекса 
+select segment_name                   index_name,
+       ceil(sum(bytes) / 1024)        index_size_kb,
+       ceil(sum(bytes) / 1024 / 1024) index_size_mb
+  from dba_segments 
+ where owner = 'ИМЯ_СХЕМЫ'
+   and segment_type = 'INDEX'
+   and segment_name = 'ИМЯ_ИНДЕКСА'
+ group by segment_name
+ ORDER BY index_size_mb desc;
+ 
+ ------------  Резмер таблицы
+ select segment_name table_name, 
+       ceil(sum(bytes) / 1024) table_size
+  from dba_segments
+ where owner = 'ИМЯ_СХЕМЫ'
+       and segment_type = 'TABLE'
+       and segment_name = 'ИМЯ_ТАБЛИЦЫ'
+ group by segment_name
+ 
+ -------------  Размер таблицы и всех ее индексов
+ select t.table_name table_name,
+       t.table_size table_size_KB,
+       i.index_name index_name,
+       i.index_size index_size_KB
+  from (select segment_name table_name, 
+               ceil(sum(bytes) / 1024) table_size
+          from dba_segments
+         where owner = 'ИМЯ_СХЕМЫ'
+           and segment_type = 'TABLE'
+           and segment_name = 'ИМЯ_ТАБЛИЦЫ'
+         group by segment_name) t
+  left join dba_indexes ti
+    on ti.table_name = t.table_name
+  left join (select segment_name index_name,
+                    ceil(sum(bytes) / 1024) index_size
+               from dba_segments
+              where owner = 'ИМЯ_СХЕМЫ'
+                and segment_type = 'INDEX'
+              group by segment_name) i
+    on i.index_name = ti.index_name
+ order by i.index_size desc;
+ 
+ ----------------  Размера BLOB
+ select sum(dbms_lob.getlength('BLOB поле') / 1024/ 1024) size_mb
+from 'ИМЯ_ТАБЛИЦЫ'
+
+---------------- Размер секционированной таблицы с LOB
+SELECT 
+ROUND(
+	(
+		(
+		 SELECT SUM(s.bytes)
+		 FROM dba_lobs d, dba_segments s
+		 WHERE d.segment_name = s.segment_name
+		 AND d.owner = 'ИМЯ_СХЕМЫ'
+		 AND d.table_name = 'ИМЯ_ТАБЛИЦЫ'
+		)
+		+
+		(
+		 SELECT SUM(d.bytes) 
+		 FROM dba_segments d
+		 WHERE d.owner = 'ИМЯ_СХЕМЫ'
+		 AND d.segment_name = 'ИМЯ_ТАБЛИЦЫ'
+		)
+	)/1024/1024/1024, 2) gb
+FROM dual;
+
+-------------------- Размер таблиц в указанной схеме с учет LOB полей
+SELECT tab.owner
+     , tab.table_name
+     , sum(round((nvl(seg.bytes,0) + nvl(seg_lobs.bytes,0)) /1024/1024,      2)) mb
+     , sum(round((nvl(seg.bytes,0) + nvl(seg_lobs.bytes,0)) /1024/1024/1024, 2)) gb
+  FROM dba_segments seg
+  JOIN dba_tables   tab 
+    ON seg.segment_name = tab.table_name 
+   AND seg.owner        = tab.owner 
+  LEFT
+  JOIN dba_lobs lobs
+    ON lobs.table_name = tab.table_name
+   AND lobs.owner      = tab.owner     
+  LEFT
+  JOIN dba_segments seg_lobs 
+    ON  seg_lobs.segment_name = lobs.segment_name 
+ WHERE 1=1
+   AND tab.owner in ('ИМЯ_СХЕМЫ')
+   --AND tab.table_name = upper('ИМЯ_ТАБЛИЦЫ') -- ограничение на таблицу
+ GROUP
+    BY tab.owner, tab.table_name
+ ORDER 
+    BY mb desc; 
+
+--------------------  Размер таблиц, индексов и кол-во партиций по всем схемам
+
+SELECT owner
+     , segment_name
+     , segment_type
+     , tablespace_name
+     , ROUND(SUM(bytes) / 1024 / 1024 / 1024) gb
+     , COUNT('x') cnt
+  FROM dba_segments
+ WHERE owner IN (SELECT username 
+                   FROM dba_users 
+                  WHERE oracle_maintained = 'N'
+                )
+ GROUP 
+    BY owner
+     , segment_name
+     , segment_type
+     , tablespace_name
+HAVING 
+       SUM(bytes) / 1024 / 1024 / 1024 >= 1
+ ORDER 
+    BY owner, 5 DESC
