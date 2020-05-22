@@ -1,0 +1,40 @@
+На стендбае находим файл который не идет
+select * from v$recover_file where error like '%FILE%';
+select file#,name from v$datafile where file#=1586;
+
+На проде смотрим что это
+ select file#,name from v$datafile where file#=1586;
+ 
+
+
+Остановим накат Standby:
+
+alter database recover managed standby database disconnect from session
+
+Установим параметр  statndby_file_management в MANUAL
+
+alter system set standby_file_management=manual;
+
+Переименуем UNNAMED datafile:
+
+alter database create datafile 'Unnamed Filename with Path' as 'Origianal file name New location';
+
+alter database create datafile '/oracle/app/oracle/product/10.2.0/db_1/dbs/UNNAMED003' as '/db01/prod/proddata-03.dbf';
+
+Вернём значение параметра statndby_file_management в AUTO:
+
+alter system set standby_file_management=auto;
+
+Запустим накат Standby:
+alter database recover managed standby database disconnect
+
+
+
+Если база данных на ASM то синтаксис такой:
+
+SQL> alter database create datafile 'unnamed datafile' as '+TargetDiskGroupName' size xM;
+
+SQL> ALTER DATABASE CREATE DATAFILE
+     '/u01/app/oracle/product/11.2.0/dbhome_1/dbs/UNNAMED00005'
+      AS '+DATA' size 500M;
+
