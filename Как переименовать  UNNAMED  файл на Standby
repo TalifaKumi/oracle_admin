@@ -2,6 +2,8 @@
 select * from v$recover_file where error like '%FILE%';
 select file#,name from v$datafile where file#=1586;
 
+select file#,name from v$datafile where file# in (select file#  from v$recover_file where error like '%FILE%');
+
 На проде смотрим что это
  select file#,name from v$datafile where file#=1586;
  
@@ -9,7 +11,7 @@ select file#,name from v$datafile where file#=1586;
 
 Остановим накат Standby:
 
-alter database recover managed standby database disconnect from session
+alter database recover managed standby database cancel;
 
 Установим параметр  statndby_file_management в MANUAL
 
@@ -20,13 +22,14 @@ alter system set standby_file_management=manual;
 alter database create datafile 'Unnamed Filename with Path' as 'Origianal file name New location';
 
 alter database create datafile '/oracle/app/oracle/product/10.2.0/db_1/dbs/UNNAMED003' as '/db01/prod/proddata-03.dbf';
+alter database create datafile '/app/oracle/product/12.2.0/db/dbs/UNNAMED01600' as '/u33/oradata/rbowrk/i_aud91.dbf';
 
 Вернём значение параметра statndby_file_management в AUTO:
 
 alter system set standby_file_management=auto;
 
 Запустим накат Standby:
-alter database recover managed standby database disconnect
+alter database recover managed standby database disconnect;
 
 
 
