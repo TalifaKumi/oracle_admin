@@ -1,0 +1,24 @@
+Ищем  по всем стенбаям
+Если не находим, вытащить из бекапа
+
+list backup of archivelog sequence 304071;
+
+run{
+set archivelog destination to '/uarch/oradata/rbowrk/arch/';
+restore archivelog from logseq=304071 until logseq=304072 thread=2;
+}
+
+run {
+allocate channel 'dev_1_1' type 'sbt_tape'  parms 'SBT_LIBRARY=/usr/omni/lib/libob2oracle8_64bit.a, ENV=(OB2BARTYPE=Oracle8,OB2APPNAME=agent,OB2BARLIST= RBOWRK795_arc)';
+restore archivelog sequence between 304071 and 304072;
+}
+
+Транспортируем
+scp /uarch/oracle/RBOWRK2/archivelog/2020_05_22/o1_mf_1_304073_hdhq1yty_.arc oracle@ibm750-5-rbocpr:/uarch/oradata/rbowrk/arch/rbowrk_1_304073_1010710685.log
+
+Регистрируем лог, если висит на GAP
+
+alter database register logfile '/uarch/oradata/rbowrk/arch/rbowrk_1_304076_1010710685.log';
+
+alter database recover managed standby database cancel;
+alter database recover managed standby database disconnect from session;
