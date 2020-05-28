@@ -1,0 +1,24 @@
+
+column   CurrentSize_G format 999999999; --- текущий размер
+column   TotalGrowth_G format 999999999; --- прирост с нарастающим итогом
+
+select sum(bytes)/1024/1024/1024  CurrentSize_G from dba_segments;
+select sum(SPACE_ALLOCATED_DELTA)/1024/1024/1024  TotalGrowth_G from DBA_HIST_SEG_STAT;
+    
+
+----  тут в какие даты и время получается этот прирост с нарастающим, все в гигах
+
+select a.snap_id,
+            SNAP_TIME,
+            sum(TOTAL_SPACE_ALLOCATED_DELTA) over ( order by a.SNAP_ID) ProgSum
+        from
+            (select SNAP_ID,
+                sum(SPACE_ALLOCATED_DELTA)/1024/1024/1024 TOTAL_SPACE_ALLOCATED_DELTA
+            from DBA_HIST_SEG_STAT
+            group by SNAP_ID
+            having sum(SPACE_ALLOCATED_TOTAL) <> 0
+            order by 1 ) a,
+            (select distinct SNAP_ID,
+                END_INTERVAL_TIME SNAP_TIME
+            from DBA_HIST_SNAPSHOT) b
+        where a.snap_id=b.snap_id;
