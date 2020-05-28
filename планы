@@ -1,0 +1,9 @@
+select sql_id,child_number,sql_text from v$sql where sql_text like '%select r . C_BANK%';  
+полученное подставляете в запрос вида
+
+
+select * from table( dbms_xplan.display_cursor('8tzkh2f6jv3j4','5', 'TYPICAL'));  
+
+8tzkh2f6jv3j4 - это у меня был sql_id, 5 - child_number
+
+Желающим получить на выходе больше букв рекомендую вместо TYPICAL использовать ALL.
