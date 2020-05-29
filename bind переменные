@@ -5,7 +5,7 @@ select sql_id,sql_text from v$sql where sql_text like '%A1.CLASS_ID = ''CL_ORG''
 select sn.END_INTERVAL_TIME,sb.NAME,sb.VALUE_STRING 
 from DBA_HIST_SQLBIND sb,DBA_HIST_SNAPSHOT sn 
 where 
-sb.sql_id='b8azj814j2v1c' and sb.WAS_CAPTURED='YES' 
+sb.sql_id= '4c3z6hnarkfv8' and sb.WAS_CAPTURED='YES' 
 and sn.snap_id=sb.snap_id order by sb.snap_id,sb.NAME;  
 
 -----------------------вариант 
@@ -16,5 +16,5 @@ from v$sql a,
 v$sql_bind_capture c
 where c.child_address=a.child_address
 and c.hash_value = a.HASH_VALUE
-and a.SQL_ID = 'b8azj814j2v1c'
+and a.SQL_ID = '4c3z6hnarkfv8'
 order by 1 desc nulls last, 4 desc;  
