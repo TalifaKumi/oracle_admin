@@ -1,0 +1,20 @@
+select sql_id,sql_text from v$sql where sql_text like '%A1.CLASS_ID = ''CL_ORG''%'  
+
+------------после чего для того, чтобы получить bind-переменные по времени, выполняете следующий запрос
+
+select sn.END_INTERVAL_TIME,sb.NAME,sb.VALUE_STRING 
+from DBA_HIST_SQLBIND sb,DBA_HIST_SNAPSHOT sn 
+where 
+sb.sql_id='b8azj814j2v1c' and sb.WAS_CAPTURED='YES' 
+and sn.snap_id=sb.snap_id order by sb.snap_id,sb.NAME;  
+
+-----------------------вариант 
+
+select c.LAST_CAPTURED, c.child_address, c.address, c.name, c.DATATYPE_STRING,
+DECODE(c.WAS_CAPTURED, 'YES', c.value_string, '['||c.value_string||']:NOT_CAPTURED') bind_var
+from v$sql a,
+v$sql_bind_capture c
+where c.child_address=a.child_address
+and c.hash_value = a.HASH_VALUE
+and a.SQL_ID = 'b8azj814j2v1c'
+order by 1 desc nulls last, 4 desc;  
