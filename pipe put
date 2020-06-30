@@ -1,0 +1,30 @@
+--------------------  Если сессия висит на ожидании "pipe out", "pipe put", то имя используемого объекта узнать можно, выполнив из под SYS следующий запрос:
+ 
+select KGLNAOWN,KGLNAOBJ
+  from X$KGLOB
+ where KGLHDADR = (select trim(to_char(to_number(p1),'XXXXXXXXXXXXXXXX'))
+                     from v$session_wait
+                    where sid=&sid and event like 'pipe %');
+                    
+select KGLNAOWN,KGLNAOBJ  from X$KGLOB where KGLHDADR in (select trim(to_char(to_number(p1),'XXXXXXXXXXXXXXXX'))
+                     from v$session_wait
+                    where event like 'pipe %');  
+                  
+--------------------  ждущие пайпы
+
+select kglnaobj from x$kglob, v$session_wait  
+where event='pipe put' and kglhdadr=p1raw;
+
+-------------------  протолкнуть пайп
+
+exec loop exit when dbms_pipe.receive_message('PIPE_NAME', 1) != 0; end loop;
+
+---------------------   продуть то что застряло
+
+exec dbms_pipe.purge('PIPE_NAME');
+
+------------------   сбросить буфер:
+
+exec dbms_pipe.reset_buffer;
+
+commit;
