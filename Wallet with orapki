@@ -1,0 +1,7 @@
+Create the wallet with orapki
+
+orapki wallet create -wallet /home/oracle/wallet -pwd password123 -auto_login
+
+Add certificates
+
+orapki wallet add -wallet /home/oracle/wallet -trusted_cert -cert verisignclass3.cer -pwd password123
