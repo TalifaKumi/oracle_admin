@@ -1,0 +1,47 @@
+begin
+  dbms_network_acl_admin.create_acl (
+    acl         => 'utl_http.xml',
+    description => 'HTTP Access',
+    principal   => 'SCOTT',
+    is_grant    => TRUE,
+    privilege   => 'connect',
+    start_date  => null,
+    end_date    => null
+  );
+ 
+  dbms_network_acl_admin.add_privilege (
+    acl        => 'utl_http.xml',
+    principal  => 'SCOTT',
+    is_grant   => TRUE,
+    privilege  => 'resolve',
+    start_date => null,
+    end_date   => null
+  );
+ 
+  dbms_network_acl_admin.assign_acl (
+    acl        => 'utl_http.xml',
+    host       => '*.oracle.com',
+    lower_port => 443,
+    upper_port => 443
+  );
+  commit;
+end;
+
+----------------------------  что есть
+
+SET LINESIZE 300;
+SET PAGES 300;
+COLUMN host FORMAT A30;
+COLUMN lower_port FORMAT 99999;
+COLUMN upper_port FORMAT 99999;
+COLUMN acl FORMAT A30;
+
+SELECT host, lower_port, upper_port, acl FROM dba_network_acls;
+
+COLUMN invert FORMAT A30;
+COLUMN principal FORMAT A20;
+COLUMN privilege FORMAT A20;
+COLUMN acl FORMAT A30;
+COLUMN is_grant FORMAT A30;
+
+select acl, principal, privilege, is_grant, invert from dba_network_acl_privileges;
