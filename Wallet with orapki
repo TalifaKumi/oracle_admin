@@ -1,7 +1,15 @@
-Create the wallet with orapki
+-----------   создать wallet 
 
 orapki wallet create -wallet /home/oracle/wallet -pwd password123 -auto_login
 
-Add certificates
+-------------  добавить certificates
 
 orapki wallet add -wallet /home/oracle/wallet -trusted_cert -cert verisignclass3.cer -pwd password123
+
+-----------   удалить wallet 
+
+ orapki wallet remove -wallet /app/oracle/product/12.2.0/db/wallet -trusted_cert_all -pwd password123
+
+-----------------  посмотертеть
+
+orapki wallet display -wallet  /app/oracle/product/12.2.0/db/wallet
