@@ -1,1 +1,36 @@
+настраиваем ORACLE_HOME ORACLE_SID
+делаем INIT {ORACLE_SID} .ora и стартуем nomount
+CREATE SPFILE FROM PFILE;
 
+select property_name,property_value from database_properties where PROPERTY_NAME in ('NLS_CHARACTERSET', 'NLS_NCHAR_CHARACTERSET') ;
+создаем базу например так
+
+CREATE DATABASE tutdf
+ USER SYS IDENTIFIED BY sec12ure
+ USER SYSTEM IDENTIFIED BY sec12ure
+ LOGFILE 
+  GROUP 1 '/data/tutdf/redo01.log'  SIZE 500M,
+  GROUP 2 '/data/tutdf/redo02.log'  SIZE 500M,
+  GROUP 3 '/data/tutdf/redo03.log'  SIZE 500M,
+  GROUP 4 '/data/tutdf/redo04.log'  SIZE 500M,
+  GROUP 5 '/data/tutdf/redo05.log'  SIZE 500M,
+  GROUP 6 '/data/tutdf/redo06.log'  SIZE 500M,
+  GROUP 7 '/data/tutdf/redo07.log'  SIZE 500M,
+  GROUP 8 '/data/tutdf/redo08.log'  SIZE 500M
+   MAXLOGFILES 16
+    MAXLOGMEMBERS 3
+    MAXDATAFILES 100
+    MAXINSTANCES 8
+    MAXLOGHISTORY 9344
+     CHARACTER SET CL8MSWIN1251
+     NATIONAL CHARACTER SET AL16UTF16
+ EXTENT MANAGEMENT LOCAL
+ DATAFILE '/data/tutdf/system01.dbf' SIZE 30G REUSE
+ SYSAUX DATAFILE '/data/tutdf/sysaux01.dbf' SIZE 30G REUSE
+ DEFAULT TABLESPACE USERS DATAFILE '/data/tutdf/users01.dbf' SIZE 500M REUSE AUTOEXTEND ON MAXSIZE UNLIMITED
+ DEFAULT TEMPORARY TABLESPACE temp TEMPFILE '/data/tutdf/temp01.dbf'  SIZE 500M REUSE AUTOEXTEND ON MAXSIZE UNLIMITED
+ UNDO TABLESPACE UNDOTBS1 DATAFILE '/data/tutdf/undotbs01.dbf' SIZE 200M REUSE AUTOEXTEND ON MAXSIZE UNLIMITED;
+ 
+ и строим словари
+ SQL> @?/rdbms/admin/catalog.sql;
+SQL> @?/rdbms/admin/catproc.sql
