@@ -1,0 +1,49 @@
+Начиная с  10 версии добавилась возможность востанавливать удаленные таблицы и индексы используя корзину.
+
+Для того что бы включить\выключить корзину:
+
+  -- Отключить корзину для сессии
+  ALTER SESSION SET RECYCLEBIN=OFF;
+  -- Отключить корзину
+  ALTER SYSTEM SET RECYCLEBIN=OFF SCOPE=SPFILE;
+  -- Включить корзину для сессии
+  ALTER SESSION SET RECYCLEBIN=ON;
+  -- Включить корзину
+  ALTER SYSTEM SET RECYCLEBIN=ON SCOPE=SPFILE;
+По умолчанию корзина включена.
+
+
+Чтобы посмотреть удаленные объеты можно воспользовать командой:
+
+  -- выбор удаленных объектов пользователя
+  select * from user_recyclebin;
+  -- выбор всех удаленных объектов
+  select * from dba_recyclebin;
+Чтобы удалить объеты из корзины:
+
+  -- удалить все реинкарнации table1 из корзины
+  purge table table1;
+  -- удалить table1 из корзины по системному имени
+  purge table "BIN$0Vq5kNlvTS6G/uyKOlzdAw==$0";
+   -- удалить все объекты пользователя "FK" из тайблспейса ts_fk.
+  purge tablespace ts_fk user fk;
+  -- удалить все объекты  из тайблспейса ts_fk.
+  purge tablespace ts_fk;
+  -- удалить все объекты из корзины текущего пользователя
+  purge recyclebin;
+  -- удалить все объекты из корзины, включая системные объеткты
+  purge dba_recyclebin;
+Подробнее о команде PURGE можно посмотреть здесь: Oracle® Database SQL Reference 10g Release 2 (10.2) PURGE
+
+Для восстановления удаленных таблиц нужно воспользоваться командами:
+
+  -- востановить последению удаленную версию table1
+  flashback table table1 to before drop;
+  -- востановить УКАЗАННУЮ удаленнную версию table1
+  flashback table "BIN$CxaooGNESZa4GThzDSX5SQ==$0" to before drop;
+Просмотр данных за определенное время
+
+1
+2
+SELECT * FROM fnd_user AS OF TIMESTAMP (SYSTIMESTAMP - INTERVAL '1000' MINUTE) u
+WHERE u.user_name = 'TEST';
