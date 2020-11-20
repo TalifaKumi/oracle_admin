@@ -38,18 +38,30 @@ col returncode for 9999
 select     username, terminal,   action_name,  to_char(timestamp,'DD.MM.YYYY:HH-MI-SS') timestamp,  to_char(logoff_time,'DD.MM.YYYY:HH-MI-SS') logoff_time, returncode
 from       dba_audit_session ;
 
+--------------------------------------------------------------------- успешные подключения
 select count(*),username,terminal,to_char(timestamp,'DD-MON-YYYY')
  from dba_audit_session
   where returncode<>0    group by username,terminal,to_char(timestamp,'DD-MON-YYYY');
-
-
+--------------------------------------------------------------------- действия
 select  username,   priv_used,  obj_name, ACTION, ACTION_NAME, to_char(timestamp,'DD-MON-YYYY HH24:MI') timestamp,   returncode
 from dba_audit_trail
 where 
 --priv_used is not null and    
 to_char(timestamp,'DD-MON-YYYY') = to_char(sysdate,'DD-MON-YYYY')
 order by timestamp;
+--------------------------------------------------------------------- неуспешные подключения
+SELECT username, terminal, timestamp
+ROM dba_audit_session
+WHERE ((username IN ('SYS', 'SYSTEM') AND terminal  'W001')
+  OR (username = 'USER' AND terminal  'W002')   )
+ AND returncode = 0;
+ --------------------------------------------------------------------------привилегии
+ SELECT username, TIMESTAMP, owner, obj_name, action_name, obj_privilege,
+     sys_privilege, admin_option, grantee, audit_option, returncode
+   FROM dba_audit_statement;
+   -------------------------------------------------------------------------- объекты схемы
+   SELECT username, timestamp, owner, obj_name, action_name, new_owner,
+       new_name, ses_actions, returncode
+    FROM dba_audit_object;
 
-
-
-
+ 
