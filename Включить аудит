@@ -1,0 +1,55 @@
+ -------------------------------------------------  Включить
+ SHOW PARAMETERS audit_trail;
+ ALTER SYSTEM SET audit_trail=db SCOPE=SPFILE;
+ show parameters audit_sys_operations 
+ ALTER SYSTEM SET audit_sys_operations=true SCOPE=SPFILE;
+ 
+ перегрузить
+ SHOW PARAMETERS audit%r;
+ 
+--------------------------------------------------  Настройка на трёх уровнях аудита: команд, привилегий и объектов схемы
+AUDIT alter system;
+AUDIT user;
+AUDIT profile, role, system grant, system audit, session;
+AUDIT table, alter table, trigger;
+AUDIT grant procedure, grant table;
+
+SELECT audit_option FROM dba_stmt_audit_opts;
+SELECT privilege, success, failure FROM dba_priv_audit_opts;
+
+ -------------------------------------------------------------  На объекты схемы
+  AUDIT select table, insert table, update table, delete table BY user, user;
+  NOAUDIT insert table, update table, delete table, select table BY user, user;
+  select 'NOAUDIT select table, insert table, update table, delete table BY '||username||' ;'
+from dba_users
+where default_tablespace not in ('SYSTEM','SYSAUX','UNDO','UNDOTBS');
+ 
+SELECT user_name, audit_option, success, failure FROM dba_stmt_audit_opts WHERE user_name IS NOT NULL;
+SELECT owner, object_name, object_type, del, ins, upd, sel FROM dba_obj_audit_opts;
+
+----------------------------------------------------------------------- Посмотерть
+col username for a15
+col terminal for a6
+col timestamp for a15
+col logoff_time for a15
+col action_name for a8
+col returncode for 9999
+
+select     username, terminal,   action_name,  to_char(timestamp,'DD.MM.YYYY:HH-MI-SS') timestamp,  to_char(logoff_time,'DD.MM.YYYY:HH-MI-SS') logoff_time, returncode
+from       dba_audit_session ;
+
+select count(*),username,terminal,to_char(timestamp,'DD-MON-YYYY')
+ from dba_audit_session
+  where returncode<>0    group by username,terminal,to_char(timestamp,'DD-MON-YYYY');
+
+
+select  username,   priv_used,  obj_name, ACTION, ACTION_NAME, to_char(timestamp,'DD-MON-YYYY HH24:MI') timestamp,   returncode
+from dba_audit_trail
+where 
+--priv_used is not null and    
+to_char(timestamp,'DD-MON-YYYY') = to_char(sysdate,'DD-MON-YYYY')
+order by timestamp;
+
+
+
+
