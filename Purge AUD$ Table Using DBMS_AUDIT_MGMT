@@ -1,12 +1,40 @@
-Oracle 11gR2 пакет DBMS_AUDIT_MGMT управляет аудит-журналами.
+----------------------------------------------------------------------Можно примитивно
+SELECT username, terminal, timestamp, owner, obj_name, action_name,
+   sessionid, entryid, statementid
+   FROM dba_audit_object
+   WHERE username = 'SYSTEM';
+   
+ DELETE sys.aud$ WHERE sessionid = ... AND entryid = ...;
+
+-----------------------------------------------------------------Oracle 11gR2 пакет DBMS_AUDIT_MGMT управляет аудит-журналами.
 
 ------------------------------------  Где лежит аудит
 select owner,segment_name,segment_type,tablespace_name,bytes/1024/1024 from dba_segments where segment_name='AUD$';
 
 ------------------------------------  Переложить
+
+CREATE TABLESPACE "AUDIT_DATA" DATAFILE SIZE 314572800 AUTOEXTEND ON NEXT 104857600 MAXSIZE 29696M;
+
 BEGIN
-DBMS_AUDIT_MGMT.SET_AUDIT_TRAIL_LOCATION(audit_trail_type => DBMS_AUDIT_MGMT.AUDIT_TRAIL_AUD_STD,
-audit_trail_location_value => ‘TS_AUDIT’);
+  DBMS_AUDIT_MGMT.SET_AUDIT_TRAIL_LOCATION(
+    AUDIT_TRAIL_TYPE => DBMS_AUDIT_MGMT.AUDIT_TRAIL_AUD_STD,
+    AUDIT_TRAIL_LOCATION_VALUE => 'AUDIT_DATA'
+  );
+END;
+/
+commit;
+
+BEGIN
+  DBMS_SCHEDULER.CREATE_JOB (
+    job_name   => 'DAILY_AUDIT_ARCHIVE_TIMESTAMP',
+    job_type   => 'PLSQL_BLOCK',
+    job_action => 'BEGIN DBMS_AUDIT_MGMT.SET_LAST_ARCHIVE_TIMESTAMP(AUDIT_TRAIL_TYPE => DBMS_AUDIT_MGMT.AUDIT_TRAIL_AUD_STD,
+                                                                    LAST_ARCHIVE_TIME => sysdate-1); END;',
+    start_date => sysdate,
+    repeat_interval => 'FREQ=HOURLY;INTERVAL=24',
+    enabled    =>  TRUE,
+    comments   => 'Create an archive timestamp'
+  );
 END;
 /
 
@@ -17,3 +45,517 @@ COLUMN audit_trail FORMAT A20
 SET LINES 2000
 
 SELECT * FROM dba_audit_mgmt_config_params;
+---------------------------------------------  То что хранится при удалении
+BEGIN
+  DBMS_AUDIT_MGMT.CREATE_PURGE_JOB(
+    AUDIT_TRAIL_TYPE           => DBMS_AUDIT_MGMT.AUDIT_TRAIL_AUD_STD,
+    AUDIT_TRAIL_PURGE_INTERVAL => 24,
+    AUDIT_TRAIL_PURGE_NAME     => 'Daily_Audit_Purge_Job',
+    USE_LAST_ARCH_TIMESTAMP    => TRUE
+  );
+END;
+/
+commit;
+
+-------------------------------------------------- удалить руками
+BEGIN
+  DBMS_AUDIT_MGMT.clean_audit_trail(
+   audit_trail_type        => DBMS_AUDIT_MGMT.AUDIT_TRAIL_AUD_STD,
+   use_last_arch_timestamp => TRUE);
+END;
+/
+-------------------------------------------------------  Джоб на удаление
+BEGIN
+  DBMS_AUDIT_MGMT.CREATE_PURGE_JOB(
+    AUDIT_TRAIL_TYPE           => DBMS_AUDIT_MGMT.AUDIT_TRAIL_AUD_STD,
+    AUDIT_TRAIL_PURGE_INTERVAL => 24,
+    AUDIT_TRAIL_PURGE_NAME     => 'Daily_Audit_Purge_Job',
+    USE_LAST_ARCH_TIMESTAMP    => TRUE
+  );
+END;
+/
+commit;
+
+-----------------------------------------------------Просмотр настроек  аудита:
+
+SELECT PARAMETER_NAME, PARAMETER_VALUE, AUDIT_TRAIL
+ FROM DBA_AUDIT_MGMT_CONFIG_PARAMS
+ WHERE audit_trail = 'STANDARD AUDIT TRAIL';
+
+SELECT owner,segment_name,tablespace_name
+ FROM dba_segments
+ WHERE segment_name ='AUD$';
+
+
+SELECT  * FROM DBA_STMT_AUDIT_OPTS;
+
+SELECT * FROM DBA_PRIV_AUDIT_OPTS;
+
+SELECT * FROM DBA_OBJ_AUDIT_OPTS;
+
+SELECT JOB_NAME,JOB_STATUS,AUDIT_TRAIL,JOB_FREQUENCY FROM DBA_AUDIT_MGMT_CLEANUP_JOBS;
+
+SELECT job_name, next_run_date, state, enabled FROM dba_scheduler_jobs WHERE job_name LIKE '%AUDIT%';
+
+
+-----------------------------------------------------------------------------------------Просмотр данных  аудита:
+
+select * from  sys.aud$        
+select * from  DBA_AUDIT_TRAIL
+
+
+select * from  DBA_AUDIT_EXISTS  
+
+select * from  DBA_AUDIT_OBJECT  
+
+select * from  DBA_AUDIT_SESSION 
+
+select * from  DBA_AUDIT_STATEMENT
+
+---------------------------------------------------------------------------------------------Активность пользователей
+
+select username, to_char(logoff_time,'mm/dd') ts,
+sum(logoff_lread) lread,
+sum(logoff_pread) pread,
+sum(logoff_lwrite) lwrite,
+sum(session_cpu) scpu
+from dba_audit_trail
+where logoff_time between TO_DATE('01.01.2020:00:00:00','DD.MM.YYYY:HH24:MI:SS')
+                      and TO_DATE('30.01.2022:23:59:59','DD.MM.YYYY:HH24:MI:SS')
+group by username, to_char(logoff_time,'mm/dd')
+order by username, to_char(logoff_time,'mm/dd');
+
+
+-----------------------------------------------------------------------------------------------CPU Usage
+
+select username, to_char(logoff_time,'mm/dd') ts,
+count(1) cnt,
+sum(session_cpu) sum_cpu, avg(session_cpu) avg_cpu,
+min(session_cpu) min_cpu, max(session_cpu) max_cpu
+from dba_audit_trail
+where logoff_time between TO_DATE('01.01.2020:00:00:00','DD.MM.YYYY:HH24:MI:SS')
+                      and TO_DATE('30.01.2022:23:59:59','DD.MM.YYYY:HH24:MI:SS')
+group by username, to_char(logoff_time,'mm/dd')
+order by username, to_char(logoff_time,'mm/dd')
+
+
+-------------------------------------------------------------------------------------------------Trace Account Locks
+
+select to_char(timestamp,'mm/dd/yy hh24:mi') ts,
+os_username, userhost, returncode
+from dba_audit_trail
+--where username = 'SCOTT'
+order by timestamp;
+
+
+0     - ok
+1017  - wrong password
+28000 - account locked
+.....
+
+------------------------------------------------------------------------------------------------------------------List  audit information:
+
+SELECT USERNAME, LOGOFF_TIME, LOGOFF_LREAD, LOGOFF_PREAD, LOGOFF_LWRITE, LOGOFF_DLOCK
+    FROM DBA_AUDIT_SESSION;
+
+
+SELECT username, extended_timestamp, owner, obj_name, action_name,   ses_actions,
+      DECODE (ses_actions,
+              '---S------------', 'DELETE',
+              '------S---------', 'INSERT',
+              '----------S-----', 'UPDATE',
+              '------------S---', 'EXECUTE',
+              '---------S------', 'SELECT',
+              'S----------------','ALTER'
+      ) transactions
+FROM dba_audit_trail
+WHERE
+      TO_CHAR(extended_timestamp, 'DD.MM.YYYY:HH24:MI:SS') >= '01.01.2020:00:00:00'
+  AND TO_CHAR(extended_timestamp, 'DD.MM.YYYY:HH24:MI:SS') <= '30.01.2022:23:59:59'
+  AND username NOT IN ('SYS', 'SYSTEM', 'DBSNMP', 'EXFSYS')
+ORDER BY extended_timestamp DESC;
+
+
+select spare1           /* OS_USERNAME */,
+       userid               /* USERNAME */,
+       userhost           /* USERHOST */,
+       terminal            /* TERMINAL */,
+       to_char(cast (          
+           (from_tz(aud.ntimestamp#,'00:00') at local) as date),'mm/dd/yy hh24:mi') ts,
+       obj$creator      /* OWNER */,
+       obj$name         /* OBJECT_NAME */,
+       aud.action#      /* ACTION */,
+       act.name          /* ACTION_NAME */
+from sys.aud$ aud, system_privilege_map spm, system_privilege_map spx,
+     STMT_AUDIT_OPTION_MAP aom, audit_actions act
+where   aud.action#     = act.action    (+)
+  and - aud.logoff$dead = spm.privilege (+)
+  and   aud.logoff$dead = aom.option#   (+)
+  and - aud.priv$used   = spx.privilege (+)
+  -- and   userid = 'SCOTT'
+  -- and act.name = 'ALTER USER'
+  and aud.ntimestamp# between TO_DATE('01.01.2020:00:00:00','DD.MM.YYYY:HH24:MI:SS')
+                          and TO_DATE('31.07.2022:23:59:59','DD.MM.YYYY:HH24:MI:SS')
+order by ts;
+
+
+
+==================================================================================================Создаем пользователей для системы ARCSIGHT:
+-- Run from user SYSTEM:
+-- :
+create user arcsight identified by "*****";
+grant create session to ARCSIGHT;
+
+-- :
+create user ARCSIGHT_PRIV identified by "*****";
+grant create session to ARCSIGHT_PRIV;
+grant create view to ARCSIGHT_PRIV;
+
+Предоставим доступ к словарю БД пользователю  ARCSIGHT:
+
+-- Run from user SYS:
+grant select on sys.dba_common_audit_trail to ARCSIGHT_PRIV with grant option;
+grant select on sys.v_$instance            to ARCSIGHT_PRIV with grant option;
+grant select on sys.v_$session             to ARCSIGHT_PRIV with grant option;
+grant select on sys.user$                  to ARCSIGHT_PRIV with grant option;
+
+
+Создаем представление:
+
+-- Run from user ARCSIGHT_PRIV;
+create or replace view ARCSIGHT_PRIV.AUDIT_ALL as
+SELECT
+  dba_common_audit_trail.AUDIT_TYPE       as AUDIT_TYPE,
+  dba_common_audit_trail.SESSION_ID       as SID,
+  dba_common_audit_trail.PROXY_SESSIONID  as PROXY_SESSIONID,
+  dba_common_audit_trail.STATEMENTID      as STATEMENTID,
+  dba_common_audit_trail.ENTRYID          as ENTRYID,
+  cast (dba_common_audit_trail.EXTENDED_TIMESTAMP as date) as EXTENDED_TIMESTAMP,
+  dba_common_audit_trail.GLOBAL_UID       as GLOBAL_UID,
+  dba_common_audit_trail.DB_USER          as USERNAME,
+  dba_common_audit_trail.CLIENT_ID        as CLIENT_ID,
+  dba_common_audit_trail.EXT_NAME         as EXT_NAME,
+  dba_common_audit_trail.OS_USER          as OS_USERNAME,
+  dba_common_audit_trail.USERHOST         as USERHOST,
+  dba_common_audit_trail.OS_PROCESS       as OS_PROCESS,
+  dba_common_audit_trail.TERMINAL         as TERMINAL,
+  dba_common_audit_trail.INSTANCE_NUMBER  as INSTANCE_NUMBER,
+  dba_common_audit_trail.OBJECT_SCHEMA    as OBJECT_SCHEMA,
+  dba_common_audit_trail.OBJECT_NAME      as OBJECT_NAME,
+  dba_common_audit_trail.ACTION           as ACTION,
+  dba_common_audit_trail.STATEMENT_TYPE   as ACTION_NAME,
+  dba_common_audit_trail.RETURNCODE       as RETURNCODE,
+  dba_common_audit_trail.SCN              as SCN,
+  dba_common_audit_trail.COMMENT_TEXT     as COMMENT_TEXT,
+  dba_common_audit_trail.SQL_TEXT         as SQL_TEXT,
+  dba_common_audit_trail.OBJ_PRIVILEGE    as OBJ_PRIVILEGE,
+  dba_common_audit_trail.ADMIN_OPTION     as ADMIN_OPTION,
+  dba_common_audit_trail.OS_PRIVILEGE     as OS_PRIVILEGE,
+  dba_common_audit_trail.GRANTEE          as GRANTEE,
+  dba_common_audit_trail.PRIV_USED        as PRIV_USED,
+  dba_common_audit_trail.SES_ACTIONS      as SES_ACTIONS,
+  v$session.PROGRAM                       as PROGRAM,
+  V$Instance.HOST_NAME                    as HOST_NAME,
+  V$Instance.VERSION                      as VERSION,
+  V$Instance.INSTANCE_NAME                as INSTANCE_NAME
+   FROM  dba_common_audit_trail, V$Instance, V$session
+WHERE V$session.AUDSID(+)=dba_common_audit_trail.SESSION_ID
+  and (
+    (dba_common_audit_trail.ACTION = 100 and dba_common_audit_trail.RETURNCODE <> 0)
+    OR
+    (dba_common_audit_trail.ACTION <> 100 and dba_common_audit_trail.AUDIT_TYPE<>'Mandatory XML Audit')
+  )
+  union all
+  SELECT v$session.type || ' Audit' as AUDIT_TYPE,
+       v$session.AUDSID as SID, null,null,null,
+               cast (v$session.LOGON_TIME as date) as EXTENDED_TIMESTAMP, null,
+               v$session.USERNAME, null,null,
+               v$session.OSUSER as OS_USERNAME,
+               v$session.MACHINE as USERHOST,
+               null,
+               v$session.TERMINAL, null,
+               v$session.SCHEMANAME as OBJECT_SCHEMA,
+               null,100,'Succesful_Logon',0,null,
+               v$session.event as COMMENT_TEXT,
+               null,null,null,null,null,null,null,
+               v$session.PROGRAM as PROGRAM,
+               V$Instance.HOST_NAME,
+               V$Instance.VERSION,
+               V$Instance.INSTANCE_NAME
+   FROM        v$session, v$instance
+/
+
+grant select on ARCSIGHT_PRIV.AUDIT_ALL to ARCSIGHT;
+
+
+
+Проверяем работу представления под пользователем  ARCSIGHT:
+
+-- Run from user ARCSIGHT:
+select *
+from ARCSIGHT_PRIV.AUDIT_ALL;
+
+
+Можем еще создать дополнительные представления:
+
+-- Run from user ARCSIGHT_PRIV;
+create or replace view ARCSIGHT_PRIV.AUDIT_PWD as
+select name, ctime, ltime, ptime, exptime from sys.user$;
+
+grant select on ARCSIGHT_PRIV.AUDIT_PWD to ARCSIGHT;
+
+
+-- Run from user ARCSIGHT:
+select *
+from ARCSIGHT_PRIV.AUDIT_PWD;
+
+
+
+
+Очистка аудита:
+
+
+# Clean system audit
+06 04 * * * ${HOME}/bin/pkg/clean_sys_audit/_run.sh 1 > /dev/null 2>> /tmp/crontab_oracle.err
+
+
+
+$more _run.sh
+
+#!/bin/bash
+
+
+#
+# Package Name:
+#
+
+tmp_string="`dirname $0`"
+pkg_name="`basename ${tmp_string}`"
+
+if [ "${pkg_name}" = "." ]; then
+  tmp_string="`pwd`"
+  pkg_name="`basename ${tmp_string}`"
+fi
+
+
+
+# Check Parameters:
+if [ $1 ]; then
+  retention_period=$1
+else
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: Error! (Parameter=2). Call `basename $0` " >&2
+  exit 2
+fi
+
+
+#
+# Setup Environment:
+#
+
+pkg_env="${HOME}/bin/_conf/.env"
+if [ ! -r "${pkg_env}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Not Found Environment file: ${pkg_env}" >&2
+  exit 2
+fi
+
+if [ -s "${pkg_env}" ]; then
+  . ${pkg_env}
+else
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment file is empty: ${pkg_env}" >&2
+  exit 2
+fi
+
+
+#
+# Check Environment:
+#
+
+# Check ORACLE_USER:
+if [ -z "${ORA_USER}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable ORA_USER not defined" >&2
+  exit 2
+else
+  ora_user=${ORA_USER}
+fi
+
+
+# Check ORACLE_BASE:
+if [ -z "${ORACLE_BASE}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable ORACLE_BASE not defined" >&2
+  exit 2
+else
+  oracle_base=${ORACLE_BASE}
+fi
+
+
+# Check ORACLE_HOME:
+if [ -z "${ORACLE_HOME}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable ORACLE_HOME not defined" >&2
+  exit 2
+elif [ ! -d "${ORACLE_HOME}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Directory ORACLE_HOME not found (${ORACLE_HOME})" >&2
+  exit 2
+fi
+
+
+# Check TMP_DIR:
+if [ -z "${TMP_DIR}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable TMP_DIR not defined" >&2
+  exit 2
+elif [ ! -d "${TMP_DIR}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Directory TMP_DIR not found (${TMP_DIR})" >&2
+  exit 2
+elif [ ! -w "${TMP_DIR}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Directory TMP_DIR not writeable (${TMP_DIR})" >&2
+  exit 2
+fi
+
+
+# Check BIN_DIR:
+if [ -z "${BIN_DIR}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable BIN_DIR not defined" >&2
+  exit 2
+elif [ ! -d "${BIN_DIR}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Directory BIN_DIR not found (${BIN_DIR})" >&2
+  exit 2
+fi
+
+
+# Check COMPANY_NAME:
+if [ -z "${COMPANY_NAME}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable COMPANY_NAME not defined" >&2
+  exit 2
+fi
+
+
+# Check HOST_NAME:
+if [ -z "${HOST_NAME}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable HOST_NAME not defined" >&2
+  exit 2
+fi
+
+
+# Check MAIL_RECIPIENTS:
+if [ -z "${MAIL_DBA}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable MAIL_RECIPIENTS not defined" >&2
+  exit 2
+fi
+
+
+# Check UTL_SEND:
+if [ -z "${UTL_SEND}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. Environment variable UTL_SEND not defined" >&2
+  exit 2
+elif [ ! -f "${UTL_SEND}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. File UTL_SEND not found (${UTL_SEND})" >&2
+  exit 2
+elif [ ! -x "${UTL_SEND}" ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: ERROR!!! Execution Aborted. File UTL_SEND not executable (${UTL_SEND})" >&2
+  exit 2
+fi
+
+
+
+# Initialize Package:
+
+pkg_flag="`basename $0 .sh`"
+run_in_progress=${TMP_DIR}/${pkg_name}_${oracle_sid}.lock
+log_file=${TMP_DIR}/${pkg_name}_${oracle_sid}.log
+prefix="${COMPANY_NAME}#${HOST_NAME} ${pkg_name}"
+mess_theme="${prefix}: Error! Another process running (${run_in_progress})"
+
+###mail_recipients="$MAIL_DBA"
+echo $mail_recipients
+mail_recipients="angor@vbrr.ru"
+echo $mail_recipients
+
+
+
+# Check Another process for running:
+if [ -f ${run_in_progress} ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: Error! Another process running. Remove a file ${run_in_progress}" >&2
+  echo "Remove a file ${run_in_progress}" | ${BIN_DIR}/_lib/utl_send.sh "${mess_theme}" "${mail_recipients}"
+  exit 2
+fi
+
+
+# Prevent Parallel Execution:
+touch ${run_in_progress}
+
+
+# Run Implementation:
+${BIN_DIR}/pkg/${pkg_name}/body.sh "${pkg_flag}" "${retention_period}" | tee ${log_file}
+
+
+# Send E-Mail:
+# mess_theme="${host_name}(${oracle_sid}): ${mess_header}"
+# cat ${log_file} | ${BIN_DIR}/_lib/utl_send.sh "${mess_theme}" "${mail_recipients}"
+
+
+# Cleanup Stop Flag:
+test -r ${run_in_progress} && rm ${run_in_progress}
+$
+
+
+
+
+$vi body.sh
+
+#!/bin/bash
+
+#
+# Check Parameters:
+#
+
+# Package Name:
+tmp_string="`dirname $0`"
+pkg_name="`basename ${tmp_string}`"
+
+if [ "${pkg_name}" = "." ]; then
+  tmp_string="`pwd`"
+  pkg_name="`basename ${tmp_string}`"
+fi
+
+# Check for internal call:
+if [ ! $1 = '_run' ]; then
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: Error! (Parameter=1) Call `basename $0` from ./_run.sh" >&2
+  exit 2
+fi
+
+
+# Check For :
+if [ $2 ]; then
+  retention_period=$2
+else
+  echo "`date +%Y.%m.%d" "%H:%M:%S` - ${pkg_name}: Error! (Parameter=3) Call `basename $0` With 3-d parameter" >&2
+  exit 2
+fi
+
+
+#
+# Define local variables:
+#
+
+# Variables:
+
+
+host_name=${HOST_NAME}
+oracle_sid=${ORACLE_SID}
+mail_recipients="$MAIL_DBA"
+
+sys_audit_dir=${ORACLE_HOME}/rdbms/audit/
+
+echo "`date +%T` Check directory for system audit: (${sys_audit_dir})"
+
+if [ -r ${sys_audit_dir} ]; then
+  echo "system audit dir done."
+  ${FIND_UTL} /u01/app/oradb/product/11.2.0.3/dbhome_1/rdbms/audit/ -type f -name "*_ora\_*\_*.aud" -mtime +${retention_period} -print -exec ls -l {} \;
+  ${FIND_UTL} /u01/app/oradb/product/11.2.0.3/dbhome_1/rdbms/audit/ -type f -name "*_ora\_*\_*.aud" -mtime +${retention_period} -print -exec rm {} \;
+else
+  loc_mess_theme="${host_name}(${oracle_sid})-${pkg_name}: Error! Not Found Directory for Clean system audit"
+  loc_mess_body="Not exist directory: ${sys_audit_dir}"
+  echo "${loc_mess_body}" | ${BIN_DIR}/_lib/utl_send.sh "${loc_mess_theme}" "${mail_recipients}"
+  echo " - Error!"
+  exit
+fi
+$
