@@ -1,0 +1,169 @@
+________________________________________________________________________________________________________________   Вариант 1
+#!/bin/sh
+
+
+#exit 0
+. /home/oracle/oracle.sh
+# alertlog file
+IN_FILE=${ORACLE_HOME}/admin/${ORACLE_SID}/bdump/alert_${ORACLE_SID}.log
+
+# file for saving last position
+OLD_SIZE_FILE=${ORACLE_HOME}/admin/${ORACLE_SID}/bdumpoffset
+
+# log file
+LOG_FILE=${ORACLE_HOME}/admin/${ORACLE_SID}/check_alert.log
+
+echo ---------------------------START CHECKING ALERT.LOG------------------------- >>$LOG_FILE
+echo `date` >>$LOG_FILE
+
+# read last position
+OLD_SIZE=`cat $OLD_SIZE_FILE`
+
+# read current position
+NEW_SIZE=`ls -l $IN_FILE | awk '{print $5}'`
+
+# check size
+if [ "$NEW_SIZE" -lt "$OLD_SIZE" ] ; then
+# if file corrupted
+OLD_SIZE=0
+fi
+
+# read from last position, grep ORA-,
+# what found send email
+
+TMPFILE=`mktemp -p /tmp/`
+tail +"$OLD_SIZE"c $IN_FILE | grep -E -i '^ORA-|down|fork|spawn|instance|SELECT|INSERT|UPDATE|DELETE|Errors|corrupt|Checkpoint' |while read LINE
+do
+echo `date '+%d.%m.%Y %H:%M'` ${ORACLE_SID}: $LINE >>$TMPFILE
+echo `date '+%d.%m.%Y %H:%M'` ${ORACLE_SID} Err: $LINE >>$LOG_FILE
+done
+TMPSIZE=`ls -l $TMPFILE | awk '{print $5}'`
+if [ $TMPSIZE -gt 0 ] ; then
+    cat $TMPFILE | mail -s "Check alert_${ORACLE_SID}.log" oracle@$HOSTNAME
+fi
+rm -f $TMPFILE
+
+# save new position
+echo $NEW_SIZE > $OLD_SIZE_FILE
+
+________________________________________________________________________________________________________________   Вариант 2
+
+
+------------------------------------------------------------------------------------1. monitor.sh
+
+#!/bin/sh 
+
+STAT_FILE=/opt/oracle/tmp/monitor.stat
+CONF_FILE=/home/oracle/scripts/logrotate/monitor.cfg
+
+/usr/sbin/logrotate -f $CONF_FILE -s $STAT_FILE
+
+---------------------------------------------------------------------------------------2. monitor.cfg
+
+#
+# This script rotates Oracle alert.log 
+# This procedure needs for monitoring purpose 
+# 
+/opt/oracle/admin/PROD/bdump/alert_PROD1.log {
+    noolddir
+    rotate 24
+    notifempty
+    nocompress 
+    create 0640 oracle oinstall
+    postrotate
+          /home/oracle/scripts/logrotate/analyze_log.sh /opt/oracle/admin/PROD/bdump/alert_PROD1.log
+    endscript
+}
+
+
+--------------------------------------------------------------------------------------------------3. analyze_log.sh
+
+#!/bin/sh
+
+# Last updated: 18/08/2003
+
+if [ -z "$1" ] ; then 
+  echo "Do nothin..."
+  exit 
+else 
+  NAME=$1
+  
+fi 
+###################################################################
+# Section:  Configuration
+###################################################################
+SUBJECT="Alert.log:`basename $1`:`hostname`:`date +'%Y.%m.%d-%H:%M:%S'`"
+MAIN="$1-BASE"
+ERROR_FILE=/tmp/last-oraerrors.log
+LOGFILE=/tmp/analyze_log.log
+###################################################################
+
+exec > $LOGFILE 2>&1
+# Main 
+for file in `ls -1 ${NAME}.[0-9]* 2>/dev/null`
+do 
+#   if [ -r $file ] ; then 
+#     break;
+#     
+#   fi
+
+   # seaching errors 
+   grep ORA- $file 2>&1 > $ERROR_FILE
+   if [ $? -eq 0 ]; then 
+   
+     # sendind Mail message
+     if [ -n "$DBA_MAILTO" ]; then 
+        cat $file |  mail -s $SUBJECT $DBA_MAILTO
+     fi
+     # send SMS message if $DBA_PAGERS defined 
+     #if [ -n "$DBA_PAGERS" ]; then 
+     #   cat $ERROR_FILE | mail -s ALERT $DBA_PAGERS
+     #fi 
+   fi
+   cat $file >> $MAIN  && rm -f $file 
+    
+done 
+
+exit 
+
+-------------------------------------------------------------------------------------------------------------4. Пример сrontab
+
+PATH=/opt/oracle/bin:/usr/local/bin:/usr/bin:/bin
+DBA_MAILTO=oradba@mydomane.com 
+
+# Monitoring of ORA-errors from Alert.log
+*/10 * * * *     /home/oracle/scripts/logrotate/monitor.sh
+
+
+
+-----------------------------------------------------------------------------------------------Есть еще 5 скрипт, но это как говорится опционально, который ротэйтит логи.
+Cобственно он к делу не относится.
+
+#
+# This script rotates Oracle's network files 
+#  like listener.log and etc.
+# 
+# 
+/opt/oracle/product/9ir2/network/log/*.log {
+    noolddir
+    notifempty
+    rotate 24
+    dateext
+    weekly 
+    copytruncate
+    compress 
+}
+
+#
+# This script rotates Oracle alert.log 
+# 
+# 
+/opt/oracle/admin/*/bdump/alert_*.log-BASE {
+    noolddir
+    notifempty
+    rotate 24
+    dateext
+    weekly
+    compress 
+    create 0640 oracle oinstall
+}
