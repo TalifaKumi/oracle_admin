@@ -1,0 +1,26 @@
+BACKUP INCREMENTAL FROM SCN 111856720494 DATABASE FORMAT '/u01/fast_recovery_area/bkp/ForStandby_%U';
+
+
+ CONFIGURE DEVICE TYPE DISK PARALLELISM 8;
+----------------------------------------------------------  на том где потерялось
+select distinct to_char(checkpoint_change#,999999999999999 )  from v$datafile_header;
+
+----------------------------------------------------------- на проде
+BACKUP INCREMENTAL FROM SCN   111804716913 DATABASE FORMAT  '/u01/fast_recovery_area/bkp/ForStandby_%U';
+
+
+ALTER DATABASE CREATE STANDBY CONTROLFILE AS '/u01/fast_recovery_area/bkp/control_ais_stb_18.ctl';
+
+scp /u01/fast_recovery_area/bkp/* oracle@ora-se-1:/u01/fast_recovery_area/ais/bkp/
+----------------------------------------------------------------  на стендбае
+
+restore STANDBY  controlfile from '/u01/fast_recovery_area/ais/bkp/control_ais_stb_18.ctl';
+alter database mount standby database;
+
+catalog start with '/u01/fast_recovery_area/ais/archivelog/'; 
+
+______________________________________ Переназвать data/temp файлы and redo logs если надо ALTER DATABASE RENAME FILE
+
+ catalog start with '/u01/fast_recovery_area/ais/bkp/';
+
+RECOVER DATABASE NOREDO;
