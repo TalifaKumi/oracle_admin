@@ -1,0 +1,42 @@
+Step by step to resolve  ORA-600 4194 4193 4197 on database crash  
+
+Best practice to create a new undo tablespace.
+This method includes segment check.
+
+Create pfile from spfile to edit
+>create pfile from spfile;
+
+1. Shutdown the instance
+
+2. set the following parameters in the pfile
+undo_management = manual
+event = '10513 trace name context forever, level 2'
+
+3. >startup restrict pfile=
+
+4. >select tablespace_name, status, segment_name from dba_rollback_segs where status != 'OFFLINE';
+
+This is critical - we are looking for all undo segments to be offline - System will always be online.
+
+If any are 'PARTLY AVAILABLE' or 'NEEDS RECOVERY' - Please open an issue with Oracle Support or update the current SR. There are many options from this moment and Oracle Support Analyst can offer different solutions for the bad undo segments.
+
+If all offline then continue to the next step
+
+5. Create new undo tablespace - example
+>create undo tablespace datafile size 2000M;
+
+6. Drop old undo tablespace
+>drop tablespace including contents and datafiles;
+
+7. >shutdown immediate;
+
+8 >startup mount;
+
+9 modify the pfile with the new undo tablespace name
+>alter system set undo_tablespace = '' scope=pfile;
+
+10. >shutdown immediate;
+
+11. >startup;
+
+Startup using the normal spfile
