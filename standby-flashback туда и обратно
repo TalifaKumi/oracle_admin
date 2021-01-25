@@ -1,0 +1,49 @@
+
+
+export ORACLE_SID=ais
+export ORACLE_HOME=/app/oracle/product/11.2.0.4/db_ee
+export PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+
+startup nomount pfile='/app/oracle/product/11.2.0.4/db_ee/dbs/pfile_ais.ora';
+alter database mount;
+
+ALTER DATABASE FLASHBACK ON;
+ALTER SYSTEM SET DB_FLASHBACK_RETENTION_TARGET=2880;
+
+create restore point standby_flashback_testing guarantee flashback database;
+ alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';
+col name for a30
+select name, scn, time from v$restore_point;
+
+
+alter database activate standby database;
+select controlfile_type from v$database;
+ 
+alter database open;
+alter user system identified by sec13ure;
+
+----------------------------  обратно
+
+
+startup mount pfile='/app/oracle/product/11.2.0.4/db_ee/dbs/pfile_ais.ora' FORCE;
+
+ 
+flashback database to restore point standby_flashback_testing;
+select controlfile_type from v$database;
+
+alter database convert to physical standby;
+startup nomount  pfile='/app/oracle/product/11.2.0.4/db_ee/dbs/pfile_ais.ora' FORCE;
+alter database mount standby database;
+ 
+select controlfile_type from v$database;
+drop restore point standby_flashback_testing;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  удалить старые логи !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++     
+CATALOG START WITH '/u01/fast_recovery_area/ais/archivelog/';
+recover database;
