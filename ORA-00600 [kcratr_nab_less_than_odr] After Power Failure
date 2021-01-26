@@ -1,0 +1,34 @@
+A client of mine suffered a power failure the other day and when the power was eventually restored they hit a problem when they tried to restart one of their databases. The opening of the database failed with the following error:
+
+ORA-600: internal error code, arguments: [kcratr_nab_less_than_odr], [1], [896], [328], [369], [], [], [], [], [], [], []
+
+I looked in the database alert log to see if there was any more information but there was nothing of any use, so I went on to the official Oracle support site, Metalink.
+
+ORA-00600 [kcratr_nab_less_than_odr]
+The ORA-00600 tool on Metalink had nothing listed for these error arguments but after a little digging around, I found a bug that refers to this exact error. The bug number is 10100975 if you are interested. And I should say by the way that the ORA-00600 tool is a great utility and has helped me out a lot in the past and saved me a lot of time and stress.
+
+According to the Metalink document about the bug there is no workaround and the only solution is to do a point-in-time recovery of the database. I did a bit more investigation though, and it seems that the error is caused by corruption of the control files. So this is what I did to fix the problem:
+
+1. Mounted the database.
+
+2. Found the name of the current redo log file:
+
+select a.member from v$logfile a ,v$log b where a.group#=b.group# and b.status=’CURRENT’;
+
+3. Shutdown aborted the database.
+
+4. Made a backup copy of the control file.
+
+5. Startup mounted the database.
+
+6. Recovered the database:
+
+recover database using backup controlfile until cancel;
+
+7. When prompted for the log file for recovery, I entered the full path and name of the redo log file that was returned in the query in step 2 above.
+
+8. Once the log was applied and I got the message that the media recovery was complete, I opened the database resetting the redo logs:
+
+alter database open resetlogs;
+
+This worked fine for me and there were no subsequent problems with the database, so hopefully if you ever hit the same problem this solution will work for you too.
