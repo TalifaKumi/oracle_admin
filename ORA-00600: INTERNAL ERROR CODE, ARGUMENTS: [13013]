@@ -1,0 +1,46 @@
+Errors in file /oracle/ora/diag/rdbms/orcl/orcl/trace/orcl_smon_5609.trc  (incident=173343):
+ ORA-00600: internal error code, arguments: [13013], [5001], [268], [8466145], [9], [8466145], [17], [], [], [], [], []
+ 
+ ========= Dump for incident 173343 (ORA 600 [13013]) ========
+
+*** 2016-01-19 22:42:49.811
+dbkedDefDump(): Starting incident default dumps (flags=0x2, level=3, mask=0x0)
+----- Current SQL Statement for this session (sql_id=dma0vxbwh325p) -----
+update smon_scn_time set time_mp=:1, time_dp=:2, scn=:3, scn_wrp=:4,  scn_bas=:5, num_mappings=:6, tim_scn_map=:7 where scn =  (select min(scn) from smon_scn_time)
+ 
+ sql>Select object_name,object_type,owner from dba_objects where data_object_id=268;
+
+OBJECT_NAME OBJECT_TYPE OWNER
+———————————– ————————- —————
+SMON_SCN_TIME TABLE SYS
+SMON_SCN_TO_TIME_AUX CLUSTER SYS
+
+sql>shutdown immediate
+sql>startup restrict
+
+ ANALYZE TABLE smon_scn_time VALIDATE STRUCTURE;
+
+Table analyzed.
+
+SYS@orcl> ANALYZE TABLE smon_scn_time VALIDATE STRUCTURE CASCADE ONLINE;
+ANALYZE TABLE smon_scn_time VALIDATE STRUCTURE CASCADE ONLINE
+*
+ERROR at line 1:
+ORA-01499: table/index cross reference failure - see trace file
+Na vině byly corruptované indexy, tak jsem je rebuildnul.
+
+SYS@orcl> ALTER INDEX SMON_SCN_TIME_TIM_IDX REBUILD ONLINE;
+Index altered.
+
+SYS@orcl> ALTER INDEX SMON_SCN_TIME_SCN_IDX REBUILD  ONLINE;
+Index altered.
+
+SYS@orcl> ANALYZE TABLE smon_scn_time VALIDATE STRUCTURE CASCADE ONLINE;
+
+Table analyzed.
+
+sql> shutdown immediately
+sql> startup
+
+sql> Analyze table SYS.SMON_SCN_TIME validate cascade structure online;
+Table analyzed.
