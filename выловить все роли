@@ -1,0 +1,33 @@
+
+----Select owner, object_name, object_type, role from SYS.DBA_CODE_ROLE_PRIVS where ROLE = 'OWSR161' order by role, object_name; 
+----Select p.* from   sys.DBA_sys_privs p, dba_roles r Where  p.grantee = r.ROLE  and P.GRANTEE = 'OWSR161' order by P.GRANTEE, P.PRIVILEGE
+
+
+----------------------------------------------------------------------   гранты роли на объекты, прямые гранты
+
+
+with r  as (select role from  dba_roles where role like 'OW%')
+Select 'GRANT '||pp.PRIVILEGE||' ON '||pp.OWNER||'.'||pp.TABLE_NAME||' TO '||pp.GRANTEE ||';' from   dba_objects o,
+       (Select p.grantee, p.owner, p.table_name, null column_name, p.privilege, p.grantable        from   dba_tab_privs p, dba_roles r        where  p.GRANTEE = r.role  and P.GRANTEE = r.role
+        UNION
+        Select p.grantee, p.owner, p.table_name, p.column_name, p.privilege, p.grantable        from   dba_col_privs p, dba_roles r        where  p.GRANTEE = r.role and P.GRANTEE =  r.role
+        ) pp
+where o.OWNER = pp.owner
+and   o.object_name = pp.table_name
+and   o.object_type in ('TABLE', 'VIEW', 'SEQUENCE', 'PACKAGE', 'PROCEDURE', 'FUNCTION', 'SNAPSHOT', 'MATERIALIZED VIEW', 'DIRECTORY', 'LIBRARY', 'TYPE', 'OPERATOR', 'INDEXTYPE', 'EDITION', 'JOB', 'PROGRAM', 'SCHEDULE')
+order by pp.grantee, pp.owner, pp.table_name, pp.column_name
+ 
+
+ ------------------------------------------ что грантуем этой роли  -- Roles granted to role;
+
+
+Select 'GRANT '||p.GRANTED_ROLE ||' TO '|| GRANTEE||';' from   dba_role_privs p, dba_roles r where  p.GRANTEE = r.ROLE  and P.GRANTEE in (select role from  dba_roles where role like 'OW%') ;
+ 
+-----------------------------------------------  гратуем эту роль кому-то role to roles
+
+
+Select 'GRANT '||p.GRANTED_ROLE ||' TO '|| GRANTEE||';' from dba_role_privs p where GRANTED_ROLE in (select role from  dba_roles where role like 'OW%') ;
+ 
+------------------------------------------------  системные
+
+ Select 'GRANT '||p.PRIVILEGE ||' TO '|| GRANTEE||';'  from   sys.DBA_sys_privs p, dba_roles r Where  p.grantee = r.ROLE  and P.GRANTEE in (select role from  dba_roles where role like 'OW%') ;
