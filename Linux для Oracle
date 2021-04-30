@@ -9,6 +9,16 @@ kernel.shmall >= RAM/page_size (page_size обычно 4096, смотрится 
         # cat /proc/sys/kernel/shmall
         # sysctl -w  kernel.shmall=2097152
 
+getconf PAGE_SIZE
+4096
+
+Make sure that the shmall is larger, not identical, than the setting of your SGA.
+For example, if you want a 12G SGA, do not set shmall to 3145728 which would be the number of pages for 12G
+
+Set it to a value larger instead, for example 3670016, which is the number of pages equivalent to 14G:
+3670016*4096=15032385536
+15032385536/1024/1024/1024 = 14G
+
 
 kernel.shmmni >= 4096
         # cat /proc/sys/kernel/shmmni
