@@ -1,0 +1,25 @@
+Не освобождается кусок памяти.
+
+
+root> ps -ef|grep $ORACLE_SID| \
+      grep -v grep|awk '{print $2}'|xargs -i kill -9 {}  
+
+
+Now, after we have killed all Oracle processes, we can then check for held memory using the ipcs вЂ“pmb command and remove the memory held by the database.  We start by displaying all held memory segments on the database server.
+root> ipcs -pmb
+
+
+IPC status from /dev/kmem as of Mon Sep 10 16:45:16 2001
+T      ID     KEY        MODE     OWNER  GROUP  SEGSZ  CPID  LPID
+Shared Memory:
+m   24064 0x4cb0be18 --rw-r----- oracle    dba 28975104  1836 23847
+m       1 0x4e040002 --rw-rw-rw-   root   root    31008   572   572
+m       2 0x411ca945 --rw-rw-rw-   root   root     8192   572   584
+m    4611 0x0c6629c9 --rw-r-----   root   root  7216716  1346 23981
+m       4 0x06347849 --rw-rw-rw-   root   root    77384  1346  1361
+
+Here we see that the only RAM memory segment owned by Oracle is ID=24064.  The following command will release this memory segment:
+
+root> ipcrm --shmem-id 24064
+
+ipcrm --shmem-id {{shmem_id}}
