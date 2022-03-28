@@ -1,0 +1,25 @@
+CREATE TABLESPACE TOOLS
+
+DATAFILE '/oracle/DB_LV/db/insis/datafile/tools01.dbf' SIZE 1G AUTOEXTEND ON NEXT 512K MAXSIZE 4G;
+
+SQL>  CONNECT / AS SYSDBA
+
+SQL>  define default_tablespace='TOOLS'
+
+SQL>  define temporary_tablespace='TEMP'
+
+SQL>  define perfstat_password='see password safe: URL -> DATABASES -> perfstat'
+
+SQL>  @?/rdbms/admin/spcreate
+
+initial snap
+conn PERFSTAT/***
+
+EXECUTE STATSPACK.SNAP(i_snap_level=>10);
+
+ gschedule ather snaps
+@?/rdbms/admin/spauto.sql
+
+alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';
+
+select SNAP_ID, SNAP_TIME from STATS$SNAPSHOT;
