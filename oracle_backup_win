@@ -1,0 +1,296 @@
+###############################################
+# rdtex_rman_backup.bat
+# date:  updated 08/05/2021
+# Autor: bkolesnichenko
+###############################################
+
+@echo off
+
+setlocal
+cls
+
+REM ---------------------------------------------------------------------------
+REM ---------------------------------------------------------------------------
+REM DECLARATION SECTION
+REM ---------------------------------------------------------------------------
+REM ---------------------------------------------------------------------------
+SET ORACLE_HOME=C:\oracle\product\11.2.0\dbhome_1
+REM SET NLS_LANG=AMERICAN_AMERICA.UTF8
+SET NLS_LANG=AMERICAN_AMERICA.CL8MSWIN1251
+SET NLS_DATE_FORMAT=DD-MON-YYYY-HH24:MI:SS
+REM SET CATALOG_PASS="catalog=rman/pwd@RMAN_DB"
+SET LOG_DEST=D:\Provys\RMANBackup\log
+SET RMAN_DEST=\\s-mos1-prvys03\PVYS2_backup
+REM SET S_COMPRESS=AS COMPRESSED BACKUPSET
+SET ERROR_MAIL_LIST=tech_support@rdtex.ru, 24support@rdtex.ru, provys.admin@tnt-tv.ru
+SET CUST_NAME=GMP
+SET s_SmtpServer=smtp.tnt-tv.ru
+REM ---------------------------------------------------------------------------
+REM ---------------------------------------------------------------------------
+
+
+SET ORACLE_SID=%1%
+SET LEVELBCK=%2%
+SET S_RETENTION=%3%
+SET PATH=%ORACLE_HOME%\bin;%PATH%
+SET ERROR_CODE=0
+
+if "%LEVELBCK%"=="arch" (SET MAIL_LIST=provys.admin@tnt-tv.ru) else (SET MAIL_LIST=kolesnichenko@rdtex.ru, provys.admin@tnt-tv.ru)
+
+
+set hr=%time:~0,2%
+if "%hr:~0,1%" equ " " set hr=0%hr:~1,1%
+echo Date: %date:~-4,4%%date:~-10,2%%date:~-7,2%_%hr%%time:~3,2%%time:~6,2%
+set datetimef=%date:~-4,4%%date:~-10,2%%date:~-7,2%_%hr%%time:~3,2%%time:~6,2%
+
+set mypath=%cd%
+echo LogFile: %LOG_DEST%\rman_%LEVELBCK%_%ORACLE_SID%_%datetimef%.log
+echo ---------------------------------------------------------------------------
+
+REM +--------------------------------------------------------------------------+
+REM | VALIDATE COMMAND-LINE PARAMETERS                                         |
+REM +--------------------------------------------------------------------------+
+
+if (%1)==() goto USAGE
+if (%2)==() goto USAGE
+if (%3)==() goto USAGE
+
+IF NOT EXIST %LOG_DEST% (
+SET ERROR_MESSAGE=ERROR: Dir %LOG_DEST% does not exists! 
+set ERROR_CODE=1
+GOTO ERROR_SECTION
+)
+
+IF NOT EXIST %RMAN_DEST% (
+SET ERROR_MESSAGE=ERROR: Dir %RMAN_DEST% does not exists! 
+set ERROR_CODE=1
+GOTO ERROR_SECTION
+)
+
+
+
+cd %LOG_DEST%
+
+
+echo %S_RETENTION%| findstr /xr "[1-9][0-9]* 0" >nul
+
+if %errorlevel% equ 0 (
+    echo RETENTION IS Valid: %S_RETENTION%
+) else (
+SET ERROR_MESSAGE=ERROR: bad Retention parameter: %S_RETENTION%
+SET ERROR_CODE=1
+goto ERROR_SECTION
+)
+
+if %S_RETENTION% == 0 (
+SET ERROR_MESSAGE=ERROR: bad Retention parameter: %S_RETENTION%
+SET ERROR_CODE=1
+goto ERROR_SECTION
+)
+
+
+
+cd %LOG_DEST%
+
+IF "%LEVELBCK%"=="lvl1" (
+REM This bit generates the RMAN script to backup database,
+REM archivelogs and control file and then crosscheck output.
+echo run { > rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel d1 device type disk maxpiecesize 50G format '\\s-mos1-prvys03\PVYS2_backup\%%d_df_lvl1_%%s_%%p.bak'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure retention policy to redundancy 1;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure archivelog deletion policy to backed up 2 times to disk;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup incremental level 1 database;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system switch logfile'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system archive log current'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter session set optimizer_mode=RULE'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup archivelog all;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup current controlfile;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel d1; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo } >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel for maintenance type disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system archive log current'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo delete noprompt backup completed before 'sysdate-%S_RETENTION%'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo delete noprompt archivelog all backed up 2 times to disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired backupset; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired archivelog until time 'sysdate-%S_RETENTION%';  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt obsolete; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of archivelog all; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of controlfile; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo exit >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+) ELSE IF "%LEVELBCK%"=="lvl0" (
+REM This bit generates the RMAN script to backup database,
+REM archivelogs and control file and then crosscheck output.
+echo run { > rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure retention policy to redundancy 1;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure archivelog deletion policy to backed up 1 times to disk;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired backupset; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt backup completed before 'sysdate-%S_RETENTION%'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel d1 device type disk maxpiecesize 50G format '\\s-mos1-prvys03\PVYS2_backup\%%d_df_lvl0_%%s_%%p.bak'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup incremental level 0 database;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system switch logfile'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system archive log current'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter session set optimizer_mode=RULE'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup archivelog all;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup current controlfile;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel d1; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo } >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel for maintenance type disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system archive log current'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo delete noprompt backup completed before 'sysdate-%S_RETENTION%'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo delete noprompt archivelog all backed up 2 times to disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired backupset; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired archivelog until time 'sysdate-%S_RETENTION%';  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt obsolete; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of archivelog all; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of controlfile; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo exit >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+) ELSE IF "%LEVELBCK%"=="full" (
+REM This bit generates the RMAN script to backup database,
+REM archivelogs and control file and then crosscheck output.
+echo run { > rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure retention policy to recovery window of 2 days;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure archivelog deletion policy to backed up 2 times to disk;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt backup completed before 'sysdate-1.25'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel d1 device type disk maxpiecesize 50G format '\\s-mos1-prvys03\PVYS2_backup\%%d_df_full_%%s_%%p.bak'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup %S_COMPRESS% database;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system switch logfile'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter system archive log current'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter session set optimizer_mode=RULE'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup archivelog all not backed up 1 times;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup current controlfile;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel d1; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo } >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel for maintenance type disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter session set optimizer_mode=RULE'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt backup completed before 'sysdate-%S_RETENTION%'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo delete noprompt archivelog all backed up 2 times to disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired backupset; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired archivelog until time 'sysdate-%S_RETENTION%';  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt obsolete; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of archivelog all; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of controlfile; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo exit >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+) ELSE IF "%LEVELBCK%"=="arch" (
+REM This bit generates the RMAN script to backup database,
+REM archivelogs and control file and then crosscheck output.
+echo run { > rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure archivelog deletion policy to backed up 1 times to disk;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel d1 device type disk maxpiecesize 10G format '\\s-mos1-prvys03\PVYS2_backup\%%d_df_arch_%%s_%%p.bak'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter session set optimizer_mode=RULE'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup archivelog all not backed up 1 times;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup current controlfile;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel d1; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo } >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired backupset; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete force noprompt archivelog until time 'sysdate-1';  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete force noprompt backup of archivelog all completed before 'sysdate-%S_RETENTION%';  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo crosscheck archivelog all; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo exit >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+) ELSE IF "%LEVELBCK%"=="cold" (
+REM This bit generates the RMAN script to backup database,
+REM archivelogs and control file and then crosscheck output.
+echo run { > rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure retention policy to redundancy 2;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo configure archivelog deletion policy to backed up 2 times to disk;  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo SHUTDOWN IMMEDIATE; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo STARTUP MOUNT; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel d1 device type disk maxpiecesize 50G format '\\s-mos1-prvys03\PVYS2_backup\%%d_df_cold_%%s_%%p.bak'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup %S_COMPRESS% database;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo backup current controlfile;>>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel d1; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo } >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo allocate channel for maintenance type disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo delete noprompt backup completed before 'sysdate-%S_RETENTION%'; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+REM echo delete noprompt archivelog all backed up 2 times to disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired backupset; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt expired archivelog until time 'sysdate-%S_RETENTION%';  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo delete noprompt obsolete; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of archivelog all; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo crosscheck backup of controlfile; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo release channel; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo sql 'alter database open'; >>rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo exit >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+) ELSE IF "%LEVELBCK%"=="TEST" (
+echo crosscheck backup of controlfile; > rman_%LEVELBCK%_%ORACLE_SID%.rcv
+echo exit >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+) ELSE (
+  REM unknown backup type!
+  goto USAGE
+)
+
+rem delete noprompt archivelog until time 'sysdate-3' backed up 2 times to disk;
+rem echo delete noprompt archivelog until time 'sysdate-%S_RETENTION%' backed up 6 times to disk; >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+rem echo delete noprompt expired archivelog until time 'sysdate-%S_RETENTION%';  >> rman_%LEVELBCK%_%ORACLE_SID%.rcv
+
+REM Running backup....
+cd %RMAN_DEST%
+
+echo Running %LEVELBCK% backup, instance %ORACLE_SID%....
+
+
+
+rman target / %CATALOG_PASS% cmdfile=%LOG_DEST%\rman_%LEVELBCK%_%ORACLE_SID%.rcv msglog=%LOG_DEST%\rman_%LEVELBCK%_%ORACLE_SID%_%datetimef%.log
+if %errorlevel% neq 0 (
+SET ERROR_MESSAGE=ERROR: %errorlevel% : Error executing rman batch file %LOG_DEST%\rman_%LEVELBCK%_%ORACLE_SID%.rcv
+SET ERROR_MESSAGE1=ERROR: Reference RMAN log file %LOG_DEST%\rman_%LEVELBCK%_%ORACLE_SID%_%datetimef%.log for details
+SET ERROR_CODE=1
+goto ERROR_SECTION
+)
+goto END
+
+
+
+:USAGE
+echo Usage:    rdtex_rman_backup.bat ORACLE_SID BACKUP_TYPE RETENTION
+echo           ORACLE_SID     = Oracle DATABASE NAME(SID) 
+echo           BACKUP_TYPE    = [lvl0 lvl1 full arch cold]
+echo           RETENTION      = retention parameter for purge section
+set ERROR_CODE=1
+set ERROR_MESSAGE=ERROR: Invalid BACKUP_TYPE provided. 
+
+exit %ERROR_CODE%
+
+:ERROR_SECTION
+REM +--------------------------------------------------------------------------+
+REM | ERROR SECTION                                                            |
+REM +--------------------------------------------------------------------------+
+
+echo ###########################################################################
+echo Error mesage      : %ERROR_MESSAGE%
+echo Additional message: %ERROR_MESSAGE1%
+echo ###########################################################################
+
+:END
+
+echo.
+if %ERROR_CODE% == 1 (
+set BACKUP_STATUS=%LEVELBCK% Backup failed. 
+set s_maillist=%ERROR_MAIL_LIST%
+) else (
+set BACKUP_STATUS=%LEVELBCK% Backup completed successfully.
+set s_maillist=%MAIL_LIST%
+)
+
+echo %BACKUP_STATUS%
+
+REM +--------------------------------------------------------------------------+
+REM | NOTIFICATION SECTION                                                        |
+REM +--------------------------------------------------------------------------+
+
+set MAIL_SUBJECT=%CUST_NAME%_%COMPUTERNAME%_%ORACLE_SID%: %BACKUP_STATUS%
+set MAIL_BODY=%BACKUP_STATUS% %ERROR_MESSAGE%
+
+for %%x in (%s_maillist%) do (
+powershell -Command Send-MailMessage -SmtpServer %s_SmtpServer% -To '%%x' -From %CUST_NAME%_%COMPUTERNAME%@tnt-tv.ru -Subject '%MAIL_SUBJECT%' -Body '%MAIL_BODY%' -Attachments %LOG_DEST%\rman_%LEVELBCK%_%ORACLE_SID%_%datetimef%.log
+)
+
+cd %mypath%
+
+exit /b %ERROR_CODE%
