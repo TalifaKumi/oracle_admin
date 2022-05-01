@@ -1,0 +1,101 @@
+cat recover_stbfb.sh
+#!/bin/sh
+PH=/app/scripts
+
+export ORACLE_SID=QBIS
+
+#. $PH/env_11.sh
+
+NLS_DATE_FORMAT='dd.mm.yyyy hh24:mi:ss'
+
+SCRIPT_DIR=/app/scripts/$1
+
+
+SCRIPT_FILE=$1_rec
+echo $SCRIPT_FILE
+echo script-file=$SCRIPT_FILE
+RMAN_FILE=$SCRIPT_DIR/$SCRIPT_FILE.rman
+LOG_FILE=$SCRIPT_DIR/$SCRIPT_FILE.log
+HIST_FILE=$SCRIPT_DIR/$SCRIPT_FILE.hist.log
+RMAN_DIR=/data/ee1_fra/$1
+RECOVERY_WINDOW=30
+LOCK_FILE=$SCRIPT_DIR/$SCRIPT_FILE.pid
+PROC='recover'
+COMM='no comments'
+
+
+
+# ============================= is running
+echo lock-file=$LOCK_FILE
+if [ -f $LOCK_FILE ]; then
+opid=$(cat $LOCK_FILE)
+pid=$(ps -fp $opid | grep -v grep | awk '{print$2}' | grep $opid)
+if [ "$pid" != "" ]; then
+echo Job is already running\! PID=$pid
+exit 1
+fi
+fi
+# ============================= rman dir exists
+touch $LOCK_FILE
+echo $$ > $LOCK_FILE
+if [ ! KaTeX parse error: Can't use function '$' in math mode at position 6: -d "$̲RMAN_DIR" ]; then
+echo Directory $RMAN_DIR not exists!
+exit 1
+fi
+echo $RMAN_DIR
+
+(
+echo ---------------------------------------------------
+echo --- begin recover at date on host hostname
+echo ---------------------------------------------------
+)>$LOG_FILE
+
+. /app/scripts/$1/mkfradir.sh $1 >> $LOG_FILE
+
+## make rman-script
+(
+echo run
+echo \{
+echo catalog start with \'$RMAN_DIR\'\;
+echo recover database\;
+echo \}
+echo exit\;
+) > $RMAN_FILE
+
+(
+echo ------------- rman
+) >> $LOG_FILE
+
+# ========================================= conver to standby
+. $SCRIPT_DIR/env_11.sh
+export ORACLE_SID=$1
+echo $ORACLE_SID >> $LOG_FILE
+echo $ORACLE_HOME >> $LOG_FILE
+sqlplus / as sysdba @$SCRIPT_DIR/convert_tostandby.sql >> $LOG_FILE
+
+# ========================================= remove archivelogs
+rm -r /data/logs >> $LOG_FILE
+mkdir /data/logs >> $LOG_FILE
+mv /data/fra/$1/$1/archivelog/* /data/logs >> $LOG_FILE
+
+# ======================================== recover atchive logs
+rman target / nocatalog @$RMAN_FILE >> $LOG_FILE
+
+# ======================================== convert to open
+#sqlplus / as sysdba @$SCRIPT_DIR/convert_fromstandby.sql >> $LOG_FILE
+. $SCRIPT_DIR/convert_fromstandby.sh $1 >> $LOG_FILE
+
+# ======================================= analize results
+. $SCRIPT_DIR/analyze_recover.sh $1 >> $LOG_FILE
+. $SCRIPT_DIR/env_11.sh
+
+NOW=date +%Y%m%d >> $LOG_FILE
+(
+echo ---------------------------------------------------
+echo --- end recover standby at date
+echo ---------------------------------------------------
+) >> $LOG_FILE
+cat $LOG_FILE >> $HIST_FILE
+rm -f $LOCK_FILE
+
+#exit 0
