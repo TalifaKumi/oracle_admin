@@ -1,0 +1,97 @@
+ cat /app/scripts/QBISUAT/create_test.sh
+#!/bin/bash
+#. env.sh
+
+. /app/scripts/$1/env_stb.sh
+
+#NLS_DATE_FORMAT='dd.mm.yyyy hh24:mi:ss'
+
+SCRIPT_DIR_LOG=/app/scripts/$1/logs
+SCRIPT_DIR=/app/scripts/$1
+
+
+SCRIPT_FILE_CTL=$SCRIPT_DIR/controlfile_$1.sql
+SCRIPT_FILE=$1
+LOG_FILE=$SCRIPT_DIR_LOG/$SCRIPT_FILE.log
+HIST_FILE=$SCRIPT_DIR_LOG/$SCRIPT_FILE.hist.log
+
+# make sql script create controlfile
+
+
+(
+echo ------------------------   create test  db $1 from db $2 at `date +%Y_%m_%d`
+) >$LOG_FILE
+
+##################################################################  standby
+. /app/scripts/$1/env_stb.sh
+echo ORACLE_SID $ORACLE_SID
+echo ORACLE_HOME = $ORACLE_HOME
+sqlplus / as sysdba @/app/scripts/$1/create_ctl.sql $1 $2
+mv /app/scripts/$1/controlfile.sql $SCRIPT_FILE_CTL
+echo 'shutdown immediate;' | sqlplus / as sysdba >> $LOG_FILE
+
+
+################################################################## test
+
+. /app/scripts/$1/env_$1.sh >> $LOG_FILE
+echo ORACLE_SID=$ORACLE_SID
+echo ORACLE_HOME=$ORACLE_HOME
+echo 'shutdown immediate;' | sqlplus / as sysdba >> $LOG_FILE
+
+cp /data/oradata/$2/* /data/oradata/$1
+rm /data/oradata/$1/*.ctl
+rm /data/oradata/$1/temp*.dbf
+
+. /app/scripts/$1/env_$1.sh >> $LOG_FILE
+echo 'startup nomount;' | sqlplus / as sysdba >> $LOG_FILE
+
+cat $SCRIPT_FILE_CTL | sqlplus / as sysdba >> $LOG_FILE
+echo 'alter database open resetlogs;' | sqlplus / as sysdba >> $LOG_FILE
+sqlplus / as sysdba @$SCRIPT_DIR/create_temp.sql $1  >> $LOG_FILE
+cat $SCRIPT_DIR/users.sql | sqlplus / as sysdba >> $LOG_FILE
+
+################################################################ standby
+. /app/scripts/$1/env_stb.sh >> $LOG_FILE
+echo 'startup nomount;' | sqlplus / as sysdba >> $LOG_FILE
+echo 'alter database mount standby database;' | sqlplus / as sysdba >> $LOG_FILE
+
+
+NOW=`date +%Y%m%d` >> $LOG_FILE
+(
+echo ---------------------------------------------------  end recover test at `date`
+) >> $LOG_FILE
+cat   $LOG_FILE >> $HIST_FILE
+
+*******************************************************************   cat create_ctl.sql
+set echo off
+set serveroutput on
+set heading off
+set pagesize 0
+set feedback off
+set linesize 3000
+set long 20000
+set trimspool on
+set verify off
+set trimspool on
+
+
+
+spool /app/scripts/&1/controlfile.sql;
+exec dbms_output.put_line('CREATE CONTROLFILE SET DATABASE "&1" RESETLOGS NOARCHIVELOG')
+select 'MAXLOGFILES 40' from dual;
+select 'MAXLOGMEMBERS 3' from dual;
+select 'MAXDATAFILES 200 ' from dual;
+select 'MAXINSTANCES 8' from dual;
+SELECT 'MAXLOGHISTORY 74788' from dual;
+exec dbms_output.put_line('LOGFILE')
+exec dbms_output.put_line('  GROUP 1 ''/data/oradata/&1/redo01.log''  SIZE 200M ,')
+exec dbms_output.put_line('  GROUP 2 ''/data/oradata/&1/redo02.log''  SIZE 200M ,')
+exec dbms_output.put_line('  GROUP 3 ''/data/oradata/&1/redo03.log''  SIZE 200M ')
+exec dbms_output.put_line('DATAFILE')
+-- SELECT '''/data/oradata/'||'&1'||substr(name,instr(NAME,'/ora'))||''''||decode(ROWNUM,(SELECT COUNT(*) FROM v$DATAFILE),NULL,',') newname FROM V$DATAFILE;
+SELECT ''''||replace(name,'&2','&1')||''''||decode(ROWNUM,(SELECT COUNT(*) FROM v$DATAFILE),NULL,',') newname FROM V$DATAFILE;
+exec dbms_output.put_line('CHARACTER SET RU8PC866;')
+exec dbms_output.put_line('exit;')
+spool off
+exit
+
