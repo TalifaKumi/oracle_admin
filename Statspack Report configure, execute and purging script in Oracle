@@ -1,0 +1,103 @@
+Statspack Report Configure, Execute and Purging script
+STATSPACK is a free reporting tool for analyzing the system as well as application performance problems. It will help to identified the top consuming sql, waits events, I/O waits which caused performance degradation in Oracle Database.
+
+Note:
+For better analysis set the parameter value “timed_statistics” to true.
+
+ALTER SYSTEM SET timed_statistics=TRUE;
+
+Step for Installing and Configuring STATSPACK Reports
+
+1. Create a new tablespace with name: PERFSTAT Tablespace
+
+CREATE TABLESPACE perfstat
+DATAFILE '/u03/oradata/perfstat.dbf' SIZE 1000M REUSE
+EXTENT MANAGEMENT LOCAL UNIFORM SIZE 512K
+SEGMENT SPA CE MANAGEMENT AUTO PERMANENT ONLINE;
+
+2. Connect with database and run the SPCREATE script which is present in oracle home.
+
+SQL> connect / as sysdba
+SQL> @?/rdbms/admin/spcreate;
+After run it will request the following:
+PERFSTAT password:
+default tablespace: assign "TOOLS" as a default tablespace for PERFSTAT
+temporary tablespace:
+
+Note:The SPCREATE.SQL install script runs the following scripts automatically:
+SPCUSR.SQL: Creates the user and grants privileges
+SPCTAB.SQL: Creates the tables
+SPCPKG.SQL: Creates the package
+ 
+3. Choose the trace level for Statspack.
+
+SELECT * FROM stats$level_description ORDER BY snap_level;
+
+Default level is: 5
+Level 0 This level captures general statistics, including rollback segment, row cache, SGA, system events, background events, session events, system statistics, wait statistics, lock statistics, and Latch information.
+Level 5 This level includes capturing high resource usage SQL Statements, along with all data captured by lower levels.
+Level 6 This level includes capturing SQL plan and SQL plan usage information for high resource usage SQL Statements, along with all data captured by lower levels.
+Level 7 This level captures segment level statistics, including logical and physical reads, row lock and buffer busy waits, along with all data captured by lower levels.
+Level 10 This level includes capturing Child Latch statistics, along with all data captured by lower levels.
+ 
+You can change the default level of a snapshot with the “statspack.snap” function as follows:
+
+SQL> exec statspack.snap(i_snap_level => 6, i_modify_parameter => 'true');
+
+4. For Manually or Auto Configure Statspack snapshot:
+For Manually
+
+--Execute this statspack manually:
+SQL> exec statspack.snap;
+
+For Auto
+Schedule the statspack snapshots to be taken every hour:
+
+SQL> @?/rdbms/admin/spauto.sql
+
+which will create a job for it to take snapshot every hour.You can also modified it by dbms_job package. To change the interval of statistics collection use the dbms_job.interval procedure
+ 
+Example
+
+-- Make Statpack report job execute after every half hours
+execute dbms_job.interval(10,'SYSDATE+(1/48)');
+--Force the job to run immediately.
+execute dbms_job.run(10);
+--Remove the auto collect job.
+execute dbms_job.remove(10);
+
+5. Change the statspack report level to 6
+
+SQL> execute statspack.snap(i_snap_level=>6);
+
+6. Scheduled purging script of 15 days:
+
+set serveroutput on
+variable v_jobno number;
+begin
+dbms_job.submit(:v_jobno,'statspack.purge(i_num_days=>15,i_extended_purge=>TRUE);',trunc(sysdate)+1+2/24,'SYSDATE',TRUE);
+commit;
+end;
+/
+
+7. Generate the Statspack Report with following commands:
+
+SQL> @?/rdbms/admin/spreport;
+
+8. Purge the statspack snapshot with following script:
+
+SQL> @?/rdbms/admin/sppurge;
+If you want to purge data from
+LOSNAPID: Begin snapshot ID
+HISNAPID: End snapshot ID
+
+9. Truncating all data related to statspack report from database.
+sptrunc.sql: This script truncates all statistics data gathered.
+
+SQL> @?/rdbms/admin/sptrunc.sql;
+
+10. Remove/deconfigure the STATSPACK reports from the Database.
+
+sqlplus "/ as sysdba"
+SQL> @?/rdbms/admin/spdrop.sql
+SQL> DROP TABLESPACE perfstat INCLUDING CONTENTS AND DATAFILES;
