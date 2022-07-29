@@ -1,0 +1,81 @@
+Step 1: Install ODBC
+ yum -y install unixODBC unixODBC-devel
+
+Step 2: Installing the Oracle Client Installation package file as follows:
+oracle-instantclient18.5-basic-18.5.0.0.0-3.x86_64.rpm
+oracle-instantclient18.5-devel-18.5.0.0.0-3.x86_64.rpm
+oracle-instantclient18.5-odbc-18.5.0.0.0-3.x86_64.rpm
+oracle-instantclient18.5-sqlplus-18.5.0.0.0-3.x86_64.rpm
+Enter the installation directory and execute:
+yum localinstall oracle-instantclient18.5-*
+The position after installation is as follows:
+/usr/share/oracle/18.5/client64
+/usr/include/oracle/18.5/client64
+/usr/lib/oracle/18.5/client64
+Create an admin directory;
+mkdir /usr/lib/oracle/18.5/client64/network/admin -p
+
+Step 3: Configure SQLPLUS connection extensions
+vi /usr/lib/oracle/18.5/client64/network/admin/tnsnames.ora
+test_oracle=
+   (DESCRIPTION =
+     (ADDRESS = (PROTOCOL = TCP)(HOST = IP)(PORT = PORT))
+     (CONNECT_DATA =
+        (SERVER = DEDICATED)
+                 (Service_name = database SID)
+     )
+    )
+    
+Step 4: Environment variable configuration
+vi /etc/profile
+export ORACLE_HOME=/usr/lib/oracle/18.5/client64
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/usr/lib64:$LD_LIBRARY_PATH
+export TNS_ADMIN=$ORACLE_HOME/network/admin
+export PATH=$PATH:$ORACLE_HOME/bin:$HOME/binsource /etc/profile
+source /etc/profile
+
+Step 5: Configure the required class library
+chmod +x /usr/lib/oracle/18.5/client64/lib/libsqora.so.18.1
+cd /usr/lib64/
+ln -s libodbcinst.so.2.0.0  libodbcinst.so.1
+
+Step 6: Add Oracle Drive
+# vim  /etc/odbcinst.ini
+[oracle]
+Description     = Oracle ODBC driver for Oracle 11g
+Driver          = /usr/lib/oracle/18.5/client64/lib/libsqora.so.18.1
+
+Step 7: Add Oracle Data Source
+# vim  /etc/odbc.ini 
+[test]
+Driver= oracle
+ServerName= ip:port/TESTDB
+ Userid = username
+ PASSWORD = password
+Eight step eight: ISQL test
+isql -v test 
+ Detect whether it can be connected and an error message that encounters an error
+isql test
++---------------------------------------+
+| Connected!                                                |
+|                                                                     |
+| sql-statement                                            |
+| help [tablename]                                       |
+| quit                                                             | 
+|                                                                     |
++---------------------------------------+
+Ninth step: SQLPLUS test
+# SQLPLUS User Name / Password @ Tnsnames.ora
+ 
+SQL*Plus: Release 11.2.0.3.0 Production on Wed Jul 19 11:39:18 2017
+ 
+Copyright (c) 1982, 2011, Oracle.  All rights reserved.
+ 
+ 
+Connected to:
+ 
+Oracle Database 11g Enterprise Edition Release 11.2.0.4.0 - 64bit Production
+With the Partitioning, OLAP, Data Mining and Real Application Testing options
+ 
+SQL> exit
+Step 10: Zabbix configuration
