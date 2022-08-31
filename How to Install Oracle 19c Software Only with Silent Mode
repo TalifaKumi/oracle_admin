@@ -1,0 +1,38 @@
+With Response File
+First of all, let's take a look at the content of the response file.
+
+[oracle@primary-19c ~]$ ll db-19c-software-only-installation.rsp
+-rwx------ 1 oracle oinstall 605 Aug  1 10:24 db-19c-software-only-installation.rsp
+[oracle@primary-19c ~]$ cat db-19c-software-only-installation.rsp
+oracle.install.responseFileVersion=/oracle/install/rspfmt_dbinstall_response_schema_v19.0.0
+oracle.install.option=INSTALL_DB_SWONLY
+UNIX_GROUP_NAME=oinstall
+INVENTORY_LOCATION=/u01/app/oraInventory
+ORACLE_BASE=/u01/app/oracle
+oracle.install.db.InstallEdition=EE
+oracle.install.db.OSDBA_GROUP=dba
+oracle.install.db.OSOPER_GROUP=oper
+oracle.install.db.OSBACKUPDBA_GROUP=backupdba
+oracle.install.db.OSDGDBA_GROUP=dgdba
+oracle.install.db.OSKMDBA_GROUP=kmdba
+oracle.install.db.OSRACDBA_GROUP=racdba
+oracle.install.db.rootconfig.executeRootScript=true
+oracle.install.db.rootconfig.configMethod=ROOT
+
+Next, install Oracle 19c software with silent mode and I assume that you have set ORACLE_SID.
+
+[oracle@primary-19c ~]$ $ORACLE_HOME/runInstaller -silent -noconfig -responseFile /home/oracle/db-19c-software-only-installation.rsp
+Launching Oracle Database Setup Wizard...
+
+
+ Enter password for 'root' user:
+The response file for this session can be found at:
+ /u01/app/oracle/product/19.0.0/dbhome_1/install/response/db_2019-08-01_10-32-36AM.rsp
+
+You can find the log of this install session at:
+ /tmp/InstallActions2019-08-08_07-32-36PM/installActions2019-08-01_10-32-36AM.log
+Successfully Setup Software.
+Moved the install session logs to:
+ /u01/app/oraInventory/logs/InstallActions2019-08-01_10-32-36AM
+ 
+ Please note that, with -noconfig, OUI will ignore any configurations related to database creation.
