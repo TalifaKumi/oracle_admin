@@ -1,0 +1,27 @@
+================================  tkprof
+sqlplus / as sysdba
+-------------------- включаем трассировку
+SQL> ALTER SESSION SET EVENTS '10046 trace name context forever, level 12';
+-------------------- назначаем файл для вывода
+SQL> alter session set tracefile_identifier = 'minidump';
+
+выполняем  запрос 'd3aykjcrkf81x'
+
+SQL> alter session set events '10046 trace name context off';
+SQL> SHOW PARAMETER user_dump_dest;
+
+------------------  в каталоге  user_dump_dest лежат 2 файла minidump.*
+minidump.trc
+minidump.trm
+----------------- в терминальном окне в нужном каталоге запускаем команду tkprof  
+tkprof  minidump.trc  minidump.tkprof sort=exeela fchela
+----------------  теперь там 3 файла minidump.*
+
+minidump.trc
+minidump.trm
+
+minidump.tkprof
+все 3 пакуете и отсылаете
+
+=================== как найти текст запроса
+SELECT sql_text FROM   dba_hist_sqltext s WHERE   s.sql_id = 'd3aykjcrkf81x';
